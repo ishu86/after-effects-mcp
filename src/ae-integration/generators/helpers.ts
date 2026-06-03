@@ -298,6 +298,21 @@ export function formatKeyframeValue(value: number | number[] | string): string {
   } else if (Array.isArray(value)) {
     return arrayToES3(value);
   } else if (typeof value === 'string') {
+    // Some MCP transports stringify untyped array arguments (e.g. "[100, 100]")
+    // because the set_keyframe `value` param has no declared JSON Schema type.
+    // Recover the array so multi-dimensional keyframes (Scale, Position) work
+    // instead of being quoted as a string and rejected by AE ("not an array").
+    const trimmed = value.trim();
+    if (trimmed.charAt(0) === '[' && trimmed.charAt(trimmed.length - 1) === ']') {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return arrayToES3(parsed);
+        }
+      } catch (e) {
+        // Not valid JSON — fall through and treat as a literal string value.
+      }
+    }
     return '"' + escapeString(value) + '"';
   }
   throw new Error('Invalid keyframe value type');
