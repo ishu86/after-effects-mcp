@@ -489,12 +489,19 @@ export function generatePrecomposeLayers(params: {
   script += 'var moveAttributes = ' + (params.moveAttributes !== false) + ';\n';
 
   // Precompose
-  script += 'var precompLayer = comp.layers.precompose(layerIndices, precompName, moveAttributes);\n';
+  // precompose() returns the new CompItem, not the new layer. Reading .index on
+  // it throws "TypeError: undefined is not an object", which makes the call look
+  // like it failed even though the precomposition did happen.
+  script += 'var precompItem = comp.layers.precompose(layerIndices, precompName, moveAttributes);\n';
+  // The new layer takes the slot of the topmost layer that went into it.
+  script += 'var minIdx = layerIndices[0];\n';
+  script += 'for (var pi = 1; pi < layerIndices.length; pi++) { if (layerIndices[pi] < minIdx) minIdx = layerIndices[pi]; }\n';
+  script += 'var precompLayer = comp.layer(minIdx);\n';
 
   script += generateResultObject({
     index: 'precompLayer.index',
     name: 'precompLayer.name',
-    sourceCompId: 'precompLayer.source.id'
+    sourceCompId: 'precompItem.id'
   });
 
   return wrapInUndoGroup(script, 'Precompose Layers');
