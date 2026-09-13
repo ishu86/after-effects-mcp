@@ -11,7 +11,8 @@ var AEMCP = {
   processedCommands: {},
   pollInterval: 100, // ms
   isRunning: false,
-  clientPrefixes: {}
+  clientPrefixes: {},
+  commandInProgress: false
 };
 
 /**
@@ -89,23 +90,44 @@ function processCommandFile(file) {
     return 1;
   }
 
+  // Reentrancy guard: the CEP panel polls processCommands() every 100ms
+  // via an async evalScript() call, without waiting for the previous poll
+  // to finish. ExtendScript itself is single-threaded so true overlap is
+  // rare, but if a previous command is still inside a blocking dialog
+  // (see below) when a poll fires, we must not open a second, nested
+  // undo group on top of one that hasn't closed yet - that is exactly
+  // what corrupts AE's undo stack ("取り消しのグループが一致しません").
+  if (AEMCP.commandInProgress) {
+    return 0;
+  }
+  AEMCP.commandInProgress = true;
+
   // Execute the script
   var result;
   try {
+    // Suppress AE's own missing-font/missing-effect/interpolation etc.
+    // dialogs while a scripted command runs. A dialog popped up here
+    // blocks the ExtendScript thread until a human (or computer-use)
+    // dismisses it, which is exactly the window in which the undo-group
+    // bookkeeping has been observed to desync.
+    app.beginSuppressDialogs();
     app.beginUndoGroup("AE-MCP: " + command.id);
 
     // Execute the script
     result = eval(command.script);
 
     app.endUndoGroup();
+    app.endSuppressDialogs(false);
 
     // Write success response
     writeSuccessResponse(file, result);
   } catch (e) {
     app.endUndoGroup();
+    app.endSuppressDialogs(false);
     writeErrorResponse(file, e.toString());
   }
 
+  AEMCP.commandInProgress = false;
   markAsProcessed(file);
   return 1;
 }
@@ -250,13 +272,23 @@ function stopMCP() {
  * Execute a script directly (for testing)
  */
 function executeScript(script) {
+  if (AEMCP.commandInProgress) {
+    return JSON.stringify({ success: false, error: "Another AE-MCP command is still in progress" });
+  }
+  AEMCP.commandInProgress = true;
+
   try {
+    app.beginSuppressDialogs();
     app.beginUndoGroup("AE-MCP Direct Execute");
     var result = eval(script);
     app.endUndoGroup();
+    app.endSuppressDialogs(false);
+    AEMCP.commandInProgress = false;
     return JSON.stringify({ success: true, data: result });
   } catch (e) {
     app.endUndoGroup();
+    app.endSuppressDialogs(false);
+    AEMCP.commandInProgress = false;
     return JSON.stringify({ success: false, error: e.toString() });
   }
 }

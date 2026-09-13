@@ -200,27 +200,28 @@ export function generateCompAccess(compId?: number, compName?: string): string {
 }
 
 /**
- * Generate ES3 code for undo group wrapper
+ * NOTE: This used to wrap generated scripts in their own
+ * app.beginUndoGroup()/app.endUndoGroup() pair. That undo group was always
+ * nested INSIDE the outer beginUndoGroup/endUndoGroup that
+ * cep-extension/jsx/host.jsx's processCommandFile() already opens/closes
+ * around every single command it evaluates. Every tool call was therefore
+ * opening and closing TWO nested undo groups instead of one.
+ *
+ * After Effects' internal undo-group bookkeeping is not fully reliable
+ * under rapid, repeated nested begin/end calls driven by scripting (a
+ * long-known ExtendScript/CEP quirk) — this showed up as AE's own
+ * "取り消しのグループが一致しません" (undo group mismatch) warning after
+ * many MCP tool calls in a row, and once triggered, AE could silently
+ * roll the project back to a stale undo-stack state on the next user
+ * interaction (e.g. scrubbing the timeline), discarding real work.
+ *
+ * Since host.jsx already provides exactly one safe, correctly-balanced
+ * undo group (with try/catch) around every command, per-tool wrapping is
+ * redundant and actively harmful. This is now a no-op passthrough — kept
+ * for API compatibility with every generator that still calls it.
  */
-export function wrapInUndoGroup(script: string, name: string): string {
-  let wrapped = '';
-  wrapped += 'app.beginUndoGroup("' + escapeString(name) + '");\n';
-  wrapped += 'try {\n';
-  // Indent the script
-  const lines = script.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim()) {
-      wrapped += '  ' + lines[i] + '\n';
-    } else {
-      wrapped += '\n';
-    }
-  }
-  wrapped += '} catch (e) {\n';
-  wrapped += '  app.endUndoGroup();\n';
-  wrapped += '  throw e;\n';
-  wrapped += '}\n';
-  wrapped += 'app.endUndoGroup();\n';
-  return wrapped;
+export function wrapInUndoGroup(script: string, _name: string): string {
+  return script;
 }
 
 /**
