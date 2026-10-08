@@ -1,232 +1,319 @@
-# Animation Examples
+# ae-mcp Examples
 
-This reference provides detailed examples of common After Effects animation patterns using the MCP tools.
+Worked recipes using the ae-mcp tools. Every call uses named parameters that match the tool schemas. Adjust names, sizes and timings to the job.
 
-## Example 1: Bouncing Ball Animation
+Ask before running anything that changes the whole project (see SKILL.md), and check existing names with `list_compositions` / `list_layers` before editing.
 
-Complete workflow for creating a bouncing ball with realistic physics:
+---
 
-```
-1. create_composition("Ball Animation", 1920, 1080, 5, 30)
-
-2. add_shape_layer(
-   compName="Ball Animation",
-   name="Ball",
-   shape="ellipse",
-   size={"width": 100, "height": 100},
-   fillColor={"r": 1.0, "g": 0.3, "b": 0.2},
-   position={"x": 960, "y": 200}
-)
-
-3. Set position keyframes:
-   - time 0: position [960, 200]
-   - time 1: position [960, 900]
-   - time 1.5: position [960, 700]
-   - time 2: position [960, 900]
-   - time 2.3: position [960, 800]
-   - time 2.5: position [960, 900]
-
-4. apply_easy_ease on position keyframes with type="IN" on downward motion
-
-5. Add squash/stretch on Scale:
-   - At impact frames: [120, 80]
-   - At peak frames: [90, 110]
-
-Alternative: Use bounce expression template:
-apply_expression_template("bounce", "Position", params={amplitude: 200, frequency: 2, decay: 0.8})
-```
-
-## Example 2: Kinetic Typography
-
-Animated text with multiple layers and timing:
+## 1. Bouncing ball
 
 ```
-1. create_composition("Kinetic Text", 1920, 1080, 8, 30)
+create_composition(name="Ball", width=1920, height=1080, frameRate=30, duration=5)
 
-2. Add three text layers:
-   add_text_layer("MOTION", fontSize=120, position={x: 960, y: 400})
-   add_text_layer("DESIGN", fontSize=120, position={x: 960, y: 600})
-   add_text_layer("STUDIO", fontSize=120, position={x: 960, y: 800})
+add_shape_layer(compName="Ball", name="Ball", shape="ellipse",
+                size={"width": 100, "height": 100},
+                fillColor={"r": 1, "g": 0.3, "b": 0.2},
+                position={"x": 960, "y": 200})
 
-3. Stagger animations:
-   - Word 1: Animate at 0-1s
-   - Word 2: Animate at 0.5-1.5s
-   - Word 3: Animate at 1-2s
+# Drop and bounce - one call per key
+set_keyframe(compName="Ball", layerName="Ball", property="position", time=0,   value=[960, 200])
+set_keyframe(compName="Ball", layerName="Ball", property="position", time=1,   value=[960, 900])
+set_keyframe(compName="Ball", layerName="Ball", property="position", time=1.5, value=[960, 700])
+set_keyframe(compName="Ball", layerName="Ball", property="position", time=2,   value=[960, 900])
 
-4. Use text animator for each:
-   create_text_animator("slideInChars", duration=1, delay=0.05)
+apply_easy_ease(compName="Ball", layerName="Ball", property="position", type="BOTH")
 
-5. Add background sweep:
-   add_solid_layer(width=1920, height=200, color={r: 0.2, g: 0.6, b: 1.0})
-   Animate position from top to bottom behind text
+# Squash on impact
+set_keyframe(compName="Ball", layerName="Ball", property="scale", time=0.9, value=[100, 100])
+set_keyframe(compName="Ball", layerName="Ball", property="scale", time=1,   value=[120, 80])
+set_keyframe(compName="Ball", layerName="Ball", property="scale", time=1.1, value=[100, 100])
 ```
 
-## Example 3: Logo Animation with Mask Reveal
+Alternative - keyframe only the fall and let the `bounceBack` template add the rebounds. Each rebound keeps `elasticity` of the speed, and they get shorter as it loses energy:
 
 ```
-1. import_footage("logo.png")
-
-2. add_av_layer(itemName="logo.png", startTime=0)
-
-3. Create mask:
-   - Add rectangle mask covering logo
-   - Animate Mask Path to reveal from left to right
-   
-4. Add glow effect:
-   apply_effect_template("glow", intensity=50)
-
-5. Fade in logo:
-   set_keyframe(property="Opacity", time=0, value=0)
-   set_keyframe(property="Opacity", time=1, value=100)
-   apply_easy_ease(property="Opacity", type="OUT")
-
-6. Add subtle rotation:
-   set_keyframe(property="Rotation", time=0, value=-5)
-   set_keyframe(property="Rotation", time=2, value=0)
+set_keyframe(compName="Ball", layerName="Ball", property="position", time=0, value=[960, 200])
+set_keyframe(compName="Ball", layerName="Ball", property="position", time=1, value=[960, 900])
+apply_expression_template(compName="Ball", layerName="Ball", property="position",
+                          template="bounceBack",
+                          params={"elasticity": 0.7, "gravity": 1500, "maxBounces": 9})
 ```
 
-## Example 4: Social Media Call-to-Action
+This linear fall lands at 700 px/s, and gives a first rebound of about 80 px and seven rebounds in all. Rebound height is speed² / (2 × gravity): lower gravity or a faster landing gives bigger bounces. **Don't easy-ease the landing key** - the ball would arrive at zero speed and not bounce at all.
+
+For a settle-and-wobble instead of a bounce, use `template="overshoot"` with `params={"frequency": 3, "decay": 5}`.
+
+---
+
+## 2. Kinetic typography
 
 ```
-1. create_composition("CTA", 1080, 1920, 6, 30)  # Vertical for Stories
+create_composition(name="Kinetic", width=1920, height=1080, frameRate=30, duration=8)
 
-2. Background gradient:
-   add_solid_layer(color={r: 0.1, g: 0.1, b: 0.3})
-   apply_effect("Gradient Ramp")
+add_text_layer(compName="Kinetic", name="Word1", text="MOTION", fontSize=120,
+               justification="CENTER", position={"x": 960, "y": 400})
+add_text_layer(compName="Kinetic", name="Word2", text="DESIGN", fontSize=120,
+               justification="CENTER", position={"x": 960, "y": 600})
+add_text_layer(compName="Kinetic", name="Word3", text="STUDIO", fontSize=120,
+               justification="CENTER", position={"x": 960, "y": 800})
 
-3. Main text:
-   add_text_layer("FOLLOW US", fontSize=80, position={x: 540, y: 800})
-   create_text_animator("scaleInChars", duration=0.8)
+# create_text_animator needs a text layer
+create_text_animator(compName="Kinetic", layerName="Word1", animatorType="slideInChars", duration=1, delay=0.05)
+create_text_animator(compName="Kinetic", layerName="Word2", animatorType="slideInChars", duration=1, delay=0.05)
+create_text_animator(compName="Kinetic", layerName="Word3", animatorType="slideInChars", duration=1, delay=0.05)
 
-4. Animated button:
-   add_shape_layer(shape="rectangle", size={width: 400, height: 100})
-   Set position keyframes with bounce
-   
-5. Pulsing effect:
-   apply_expression_template("springy", "Scale", params={frequency: 2})
-
-6. Add arrow icon:
-   add_shape_layer(shape="polygon", points=3)
-   Rotate and position as arrow
-   Animate position with wiggle
+# Stagger the words by shifting each layer in time
+modify_layer(compName="Kinetic", layerName="Word2", startTime=0.5)
+modify_layer(compName="Kinetic", layerName="Word3", startTime=1)
 ```
 
-## Example 5: Data Visualization Counter
+---
+
+## 3. Logo reveal with an animated mask
+
+The logo must already be in the project - ask before importing.
 
 ```
-1. create_composition("Counter", 1920, 1080, 5, 30)
+import_footage(path="C:/Assets/logo.png")                 # confirm with the user first
 
-2. add_text_layer("0", fontSize=200, position={x: 960, y: 540})
+create_composition(name="Logo", width=1920, height=1080, frameRate=30, duration=4)
+add_av_layer(compName="Logo", itemName="logo.png")
 
-3. Apply expression to Source Text:
-   expression = `
-   startValue = 0;
-   endValue = 1000;
-   duration = 3;
-   
-   if (time < duration) {
-     currentValue = Math.round(linear(time, 0, duration, startValue, endValue));
-   } else {
-     currentValue = endValue;
-   }
-   
-   currentValue.toString();
-   `
-   set_expression(property="Source Text", expression=expression)
+# Mask vertices are in the layer's own pixels, (0,0) = top-left.
+# For a W x H logo, start with a zero-width rectangle on the left edge...
+add_mask(compName="Logo", layerName="logo.png", name="Reveal",
+         vertices=[[0, 0], [0, 0], [0, H], [0, H]], feather=40)
 
-4. Add prefix/suffix for units ($, %, etc.)
+# ...and widen it to cover the whole logo.
+set_mask_keyframes(compName="Logo", layerName="logo.png", maskName="Reveal",
+                   keyframes=[
+                     {"time": 0,   "vertices": [[0, 0], [0, 0], [0, H], [0, H]]},
+                     {"time": 1.5, "vertices": [[0, 0], [W, 0], [W, H], [0, H]]}
+                   ])
 
-5. Add subtle scale pulse:
-   apply_expression_template("springy", "Scale")
+apply_effect_template(compName="Logo", layerName="logo.png", template="glow", intensity=50)
+
+set_keyframe(compName="Logo", layerName="logo.png", property="rotation", time=0, value=-5)
+set_keyframe(compName="Logo", layerName="logo.png", property="rotation", time=2, value=0)
+apply_easy_ease(compName="Logo", layerName="logo.png", property="rotation", type="OUT")
 ```
 
-## Example 6: Parallax Scrolling Scene
+For a canned animation instead, `create_logo_reveal(compName="Logo", logoItemName="logo.png", style="scale")`. `style="particle"` assembles the logo out of particles and adds a sparkle burst as it lands.
+
+---
+
+## 4. Line draw-on with Trim Paths
 
 ```
-1. create_composition("Parallax", 1920, 1080, 10, 30)
+create_composition(name="DrawOn", width=1920, height=1080, frameRate=30, duration=3)
 
-2. Import multiple layers (background, midground, foreground)
+# An open two-point path, centred on the comp
+create_path(compName="DrawOn", name="Line", pathName="Stroke Path",
+            vertices=[[-400, 0], [400, 0]], closed=false,
+            strokeColor={"r": 1, "g": 1, "b": 1}, strokeWidth=6)
 
-3. Set up null object as camera controller:
-   add_null_layer(name="Camera Control")
+add_shape_operator(compName="DrawOn", layerName="Line",
+                   operator="trimPaths", properties={"end": 0})
 
-4. Link all layers to null:
-   For each layer, link_properties(
-      sourceProperty="Position",
-      targetProperty="Position",
-      offset=[layer_specific_multiplier, 0]
-   )
-
-5. Animate null object position:
-   set_keyframe on Camera Control position
-   Different layers move at different speeds based on offset
-
-6. Add motion blur for smoothness:
-   modify_layer(layerName=each_layer, motionBlur=true)
+# The operator lives inside the group's Contents - note the slashes
+set_keyframe(compName="DrawOn", layerName="Line",
+             property="Contents/Group 1/Contents/Trim Paths 1/End", time=0, value=0)
+set_keyframe(compName="DrawOn", layerName="Line",
+             property="Contents/Group 1/Contents/Trim Paths 1/End", time=1, value=100)
+apply_easy_ease(compName="DrawOn", layerName="Line",
+                property="Contents/Group 1/Contents/Trim Paths 1/End", type="BOTH")
 ```
 
-## Example 7: Glitch Effect Title
+For a curve, add tangents (relative to each vertex). A circle of radius 100:
 
 ```
-1. create_composition("Glitch Title", 1920, 1080, 4, 30)
-
-2. add_text_layer("GLITCH", fontSize=150)
-
-3. Duplicate layer 3 times
-
-4. Apply chromatic aberration:
-   - Layer 1 (Red): Shift position left, blend mode "Screen"
-   - Layer 2 (Green): Keep center
-   - Layer 3 (Blue): Shift position right, blend mode "Screen"
-
-5. Add displacement:
-   apply_effect("Turbulent Displace")
-   Animate Evolution for movement
-
-6. Flicker opacity:
-   apply_expression_template("randomize", "Opacity", params={min: 50, max: 100})
+vertices    = [[0, -100], [100, 0], [0, 100], [-100, 0]]
+inTangents  = [[-55, 0], [0, -55], [55, 0], [0, 55]]
+outTangents = [[55, 0], [0, 55], [-55, 0], [0, -55]]
 ```
 
-## Example 8: Progress Bar Animation
+---
+
+## 5. Extruded 3D title
 
 ```
-1. create_composition("Progress", 1920, 1080, 3, 30)
+create_composition(name="Title3D", width=1920, height=1080, frameRate=30, duration=5)
+add_text_layer(compName="Title3D", name="Title", text="LAUNCH", fontSize=200,
+               justification="CENTER", position={"x": 960, "y": 540})
 
-2. Create background bar:
-   add_shape_layer(shape="rectangle", size={width: 1200, height: 80})
-   fillColor = gray
+get_3d_info(compName="Title3D")                    # new comps start on the Classic renderer
+set_comp_renderer(compName="Title3D", renderer="advanced")
 
-3. Create progress bar:
-   add_shape_layer(shape="rectangle", size={width: 1200, height: 80})
-   fillColor = blue
-   
-4. Mask progress bar:
-   Add mask to progress bar layer
-   Animate Mask Path from 0% to 100% width
+set_3d_layer(compName="Title3D", layerName="Title", enable3D=true, orientation=[0, 20, 0])
+set_geometry_options(compName="Title3D", layerName="Title",
+                     extrusionDepth=60, bevelStyle=2, bevelDepth=4)
+set_material_options(compName="Title3D", layerName="Title",
+                     castsShadows=true, ambient=40, diffuse=70, specularIntensity=55)
 
-5. Add percentage text:
-   add_text_layer("0%")
-   Apply counter expression synced with mask animation
+add_camera_layer(compName="Title3D", name="Cam", type="TWO_NODE")
+set_camera_options(compName="Title3D", layerName="Cam",
+                   zoom=1200, depthOfField=true, focusDistance=1200, aperture=40)
+
+add_light_layer(compName="Title3D", name="Key", type="SPOT")
+set_light_options(compName="Title3D", layerName="Key",
+                  intensity=120, color={"r": 1, "g": 0.9, "b": 0.7},
+                  coneAngle=70, coneFeather=40, castsShadows=true, shadowDarkness=60)
 ```
 
-## Timing and Easing Patterns
+Read the `failed` list in each `set_*_options` result. Under the `advanced` renderer, for example, camera `blurLevel` and the iris controls are refused, and each failure names the renderer that supports it.
 
-**Sharp transitions** (UI elements):
-- Duration: 0.3s
-- Easing: Easy Ease In/Out
-- Use for: Buttons, menus, toggles
+---
 
-**Smooth reveals** (content):
-- Duration: 0.8-1.2s
-- Easing: Easy Ease Out
-- Use for: Text, images, cards
+## 6. Number counter
 
-**Energetic motion** (attention-grabbing):
-- Duration: 0.4-0.6s
-- Easing: Overshoot/bounce
-- Use for: Logos, highlights, CTAs
+```
+create_composition(name="Counter", width=1920, height=1080, frameRate=30, duration=5)
+add_text_layer(compName="Counter", name="Count", text="0", fontSize=200,
+               justification="CENTER", position={"x": 960, "y": 540})
 
-**Continuous animation** (ambient):
-- Duration: Loop (2-4s)
-- Easing: Linear or sine wave
-- Use for: Backgrounds, subtle movement
+set_expression(compName="Counter", layerName="Count", property="sourceText",
+               expression="Math.round(linear(time, 0, 3, 0, 1000)).toString()")
+```
+
+For a prefix or suffix: `"$" + Math.round(linear(time, 0, 3, 0, 1000)).toString()`.
+
+---
+
+## 7. Parallax with a controller null
+
+`link_properties` can only *add* an offset, so parallax uses an expression with a multiplier.
+
+```
+add_null_layer(compName="Scene", name="Camera Control")
+
+# Each layer moves by a fraction of the controller's motion.
+# 0.2 = far background, 0.5 = midground, 1.0 = foreground.
+set_expression(compName="Scene", layerName="Background", property="position",
+  expression='var c = thisComp.layer("Camera Control").transform.position; value + (c - c.valueAtTime(0)) * 0.2')
+set_expression(compName="Scene", layerName="Midground", property="position",
+  expression='var c = thisComp.layer("Camera Control").transform.position; value + (c - c.valueAtTime(0)) * 0.5')
+
+# Animate only the controller
+set_keyframe(compName="Scene", layerName="Camera Control", property="position", time=0,  value=[960, 540])
+set_keyframe(compName="Scene", layerName="Camera Control", property="position", time=10, value=[560, 540])
+```
+
+---
+
+## 8. Glitch title
+
+There is no duplicate-layer tool, so build the three copies directly.
+
+```
+create_composition(name="Glitch", width=1920, height=1080, frameRate=30, duration=4)
+
+add_text_layer(compName="Glitch", name="Red",   text="GLITCH", fontSize=150,
+               justification="CENTER", color={"r": 1, "g": 0, "b": 0}, position={"x": 950, "y": 540})
+add_text_layer(compName="Glitch", name="Green", text="GLITCH", fontSize=150,
+               justification="CENTER", color={"r": 0, "g": 1, "b": 0}, position={"x": 960, "y": 540})
+add_text_layer(compName="Glitch", name="Blue",  text="GLITCH", fontSize=150,
+               justification="CENTER", color={"r": 0, "g": 0, "b": 1}, position={"x": 970, "y": 540})
+
+# Blend modes are AE constants in capitals
+modify_layer(compName="Glitch", layerName="Red",  blendMode="SCREEN")
+modify_layer(compName="Glitch", layerName="Blue", blendMode="SCREEN")
+
+apply_effect(compName="Glitch", layerName="Green", effect="Turbulent Displace")
+
+# Flicker
+apply_expression_template(compName="Glitch", layerName="Red", property="opacity",
+                          template="wiggle", params={"frequency": 12, "amplitude": 40})
+```
+
+---
+
+## 9. Render and deliver
+
+```
+list_render_templates()        # use the user's existing presets by name
+
+add_to_render_queue(compName="Title3D",
+                    outputPath="D:/Deliveries/Title3D.mp4",
+                    renderSettingsTemplate="Best Settings",
+                    outputModuleTemplate="H.264 - Match Render Settings - 15 Mbps")
+
+list_render_queue()            # confirm status "queued" and the real outputPath
+
+queue_in_ame(renderImmediately=true)     # returns immediately; AME does the encoding
+```
+
+Avoid `control_render(action="start")` for anything long: it synchronously blocks the CEP bridge until the queue finishes, so polling and stop/pause/resume are unavailable. A command timeout does not cancel rendering; do not retry or modify the queue until AE finishes. Use AE's UI to interrupt native rendering. `list_render_queue` does not track AME progress.
+
+---
+
+## 10. Particle text reveal
+
+Text assembling out of particles, then a sparkle burst as it lands. The reveal treats a comp as its "logo", so the text goes in its own tight comp first.
+
+```
+# 1. The text, in a comp just big enough to hold it
+create_composition(name="Particle Text - Source", width=1500, height=340, frameRate=30, duration=4)
+add_text_layer(compName="Particle Text - Source", name="Title", text="MOTION", fontSize=240,
+               justification="CENTER", color={"r": 1, "g": 1, "b": 1},
+               position={"x": 750, "y": 255})
+
+# 2. The main comp and the reveal
+create_composition(name="Particle Text Reveal", width=1920, height=1080, frameRate=30, duration=4)
+create_logo_reveal(compName="Particle Text Reveal", logoItemName="Particle Text - Source",
+                   style="particle", duration=4,
+                   backgroundColor={"r": 0.03, "g": 0.035, "b": 0.07})
+# -> logoBoundsExpandedBy: "collapseTransformation", particleBurstAdded: true
+
+# 3. A slow push-in so the end frame doesn't sit dead
+set_keyframe(compName="Particle Text Reveal", layerName="Particle Text - Source",
+             property="scale", time=0, value=[92, 92])
+set_keyframe(compName="Particle Text Reveal", layerName="Particle Text - Source",
+             property="scale", time=4, value=[100, 100])
+
+set_active_composition(compName="Particle Text Reveal")
+
+# 4. Preview - through the render queue, not frame by frame
+add_to_render_queue(compName="Particle Text Reveal",
+                    outputPath="D:/Previews/particle_text_reveal.mp4",
+                    renderSettingsTemplate="Best Settings",
+                    outputModuleTemplate="H.264 - Match Render Settings - 15 Mbps")
+queue_in_ame(renderImmediately=true)  # render duration is not predictable; prefer AME
+# Monitor completion in AME; list_render_queue is not an AME progress monitor.
+```
+
+Timeline: the text fades in as a particle cloud, forms letters by about 1.7 s, lands at 2 s (half the duration) with the burst, and holds from there. The source comp layer gets Collapse Transformations automatically, so the scatter isn't clipped to the 1500x340 box.
+
+---
+
+## 11. Speed ramp without the rewind
+
+Spinning something from a keyframed speed. Multiplying the slider by `time` makes it spin backwards as soon as the speed eases off; `speedControl` accumulates the speed instead.
+
+```
+add_null_layer(compName="Scene", name="Wheel")
+add_expression_control(compName="Scene", layerName="Wheel",
+                       controlType="slider", controlName="Speed")
+
+# Speed in degrees per second: spin up, hold, spin down
+set_keyframe(compName="Scene", layerName="Wheel", property="Effects/Speed/Slider", time=0, value=0)
+set_keyframe(compName="Scene", layerName="Wheel", property="Effects/Speed/Slider", time=1, value=360)
+set_keyframe(compName="Scene", layerName="Wheel", property="Effects/Speed/Slider", time=2, value=360)
+set_keyframe(compName="Scene", layerName="Wheel", property="Effects/Speed/Slider", time=3, value=0)
+
+apply_expression_template(compName="Scene", layerName="Wheel", property="rotation",
+                          template="speedControl", params={"controlName": "Speed"})
+```
+
+Rotation runs 0 → 180° at 1 s → 540° at 2 s → 720° at 3 s, then holds at 720°.
+
+---
+
+## Timing and easing
+
+| Use | Duration | Easing |
+|---|---|---|
+| UI elements, buttons | 0.3 s | Easy ease both ways |
+| Text and image reveals | 0.8-1.2 s | Ease out |
+| Logos, call-to-action | 0.4-0.6 s | `overshoot` or `bounce` expression |
+| Ambient loops | 2-4 s | Linear, or `loopCycle` |

@@ -57,12 +57,13 @@ export function generateImportFolder(params: {
   script += 'var rootFolder = app.project.items.addFolder(folder.name);\n';
   script += 'importFilesFromFolder(folder, rootFolder);\n';
 
-  script += '{\n';
+  script += 'var result = ({\n';
   script += '  folderId: rootFolder.id,\n';
   script += '  folderName: rootFolder.name,\n';
   script += '  importedCount: importedItems.length,\n';
   script += '  items: importedItems\n';
-  script += '};\n';
+  script += '});\n';
+  script += 'result;\n';
 
   return wrapInUndoGroup(script, 'Import Folder');
 }
@@ -271,11 +272,12 @@ export function generateCollectFiles(params: {
   script += 'var projectFile = new File(outputFolder.fsName + "/" + (app.project.file ? app.project.file.name : "collected_project.aep"));\n';
   script += 'app.project.save(projectFile);\n';
 
-  script += '{\n';
+  script += 'var result = ({\n';
   script += '  outputPath: outputFolder.fsName,\n';
   script += '  collectedCount: collectedFiles.length,\n';
   script += '  files: collectedFiles\n';
-  script += '};\n';
+  script += '});\n';
+  script += 'result;\n';
 
   return wrapInUndoGroup(script, 'Collect Files');
 }

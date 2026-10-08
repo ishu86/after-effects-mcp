@@ -450,16 +450,21 @@ export function generateReorderEffects(params: {
   script += generateCompAccess(params.compId, params.compName);
   script += generateLayerAccess('comp', params.layerIndex, params.layerName);
 
-  script += 'var effects = layer.property("Effects");\n';
-  script += 'var effect = effects(' + params.effectIndex + ');\n';
-  script += 'if (!effect) {\n';
-  script += '  throw new Error("Effect not found at index: ' + params.effectIndex + '");\n';
+  script += 'var effects = layer.property("ADBE Effect Parade");\n';
+  script += 'if (' + params.effectIndex + ' < 1 || ' + params.effectIndex + ' > effects.numProperties) {\n';
+  script += '  throw new Error("Effect index ' + params.effectIndex + ' out of range; layer has " + effects.numProperties + " effect(s)");\n';
   script += '}\n';
+  script += 'if (' + params.newIndex + ' < 1 || ' + params.newIndex + ' > effects.numProperties) {\n';
+  script += '  throw new Error("New index ' + params.newIndex + ' out of range; layer has " + effects.numProperties + " effect(s)");\n';
+  script += '}\n';
+  script += 'var effect = effects.property(' + params.effectIndex + ');\n';
 
+  // moveTo() invalidates this reference, so read the name first.
+  script += 'var movedEffectName = effect.name;\n';
   script += 'effect.moveTo(' + params.newIndex + ');\n';
 
   script += generateResultObject({
-    effectName: 'effect.name',
+    effectName: 'movedEffectName',
     newIndex: String(params.newIndex)
   });
 
@@ -523,10 +528,11 @@ export function generateCopyEffects(params: {
   script += '  }\n';
   script += '}\n';
 
-  script += '{\n';
+  script += 'var result = ({\n';
   script += '  copiedEffects: copiedEffects,\n';
   script += '  count: copiedEffects.length\n';
-  script += '};\n';
+  script += '});\n';
+  script += 'result;\n';
 
   return wrapInUndoGroup(script, 'Copy Effects');
 }

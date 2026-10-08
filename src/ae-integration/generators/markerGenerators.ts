@@ -250,11 +250,12 @@ export function generateGetCurrentTime(params: {
   script += generateProjectCheck();
   script += generateCompAccess(params.compId, params.compName);
 
-  script += '{\n';
+  script += 'var result = ({\n';
   script += '  time: comp.time,\n';
   script += '  frame: Math.round(comp.time * comp.frameRate),\n';
   script += '  frameRate: comp.frameRate\n';
-  script += '};\n';
+  script += '});\n';
+  script += 'result;\n';
 
   return script;
 }
@@ -381,11 +382,12 @@ export function generateNavigateMarkers(params: {
   script += 'var markerTime = markerProp.keyTime(targetIndex);\n';
   script += 'comp.time = markerTime;\n';
 
-  script += '{\n';
+  script += 'var result = ({\n';
   script += '  markerIndex: targetIndex,\n';
   script += '  time: markerTime,\n';
   script += '  comment: markerProp.keyValue(targetIndex).comment\n';
-  script += '};\n';
+  script += '});\n';
+  script += 'result;\n';
 
   return script;
 }

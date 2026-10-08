@@ -119,6 +119,59 @@ export {
   generateNavigateMarkers
 } from './generators/markerGenerators.js';
 
+// Shape generators (bezier paths + shape operators)
+export {
+  generateCreatePath,
+  generateGetPath,
+  generateSetPathKeyframes,
+  generateAddShapeOperator,
+  SHAPE_OPERATORS,
+  SHAPE_OPERATOR_PROPERTIES,
+  SHAPE_MATCH_NAMES
+} from './generators/shapeGenerators.js';
+
+// 3D generators
+export {
+  generateSetCompRenderer,
+  generateSet3DLayer,
+  generateSetMaterialOptions,
+  generateSetGeometryOptions,
+  generateSetCameraOptions,
+  generateSetLightOptions,
+  generateGet3DInfo,
+  RENDERERS,
+  EXTRUSION_RENDERERS,
+  MATERIAL_PROPERTIES,
+  CAMERA_PROPERTIES,
+  LIGHT_PROPERTIES,
+  EXTRUSION_PROPERTIES,
+  PLANE_PROPERTIES,
+  TRANSFORM_3D_PROPERTIES
+} from './generators/threeDGenerators.js';
+
+// Mask generators
+export {
+  generateAddMask,
+  generateListMasks,
+  generateGetMaskPath,
+  generateSetMaskPath,
+  generateSetMaskKeyframes,
+  generateSetMaskProperties,
+  generateDeleteMask,
+  MASK_MATCH_NAMES
+} from './generators/maskGenerators.js';
+
+// Render queue generators
+export {
+  generateAddToRenderQueue,
+  generateListRenderQueue,
+  generateListRenderTemplates,
+  generateSetRenderQueueItem,
+  generateRemoveFromRenderQueue,
+  generateControlRender,
+  generateQueueInAME
+} from './generators/renderQueueGenerators.js';
+
 // Helpers (for direct use if needed)
 export {
   escapeString,

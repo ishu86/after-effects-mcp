@@ -101,9 +101,9 @@ export function generateSetKeyframeAdvanced(params: {
   if (params.inEase || params.outEase) {
     // Determine number of dimensions
     script += 'var numDims = 1;\n';
-    script += 'if (prop.propertyValueType === PropertyValueType.TwoD || prop.propertyValueType === PropertyValueType.TwoD_SPATIAL) {\n';
+    script += 'if (prop.propertyValueType === PropertyValueType.TwoD) {\n';
     script += '  numDims = 2;\n';
-    script += '} else if (prop.propertyValueType === PropertyValueType.ThreeD || prop.propertyValueType === PropertyValueType.ThreeD_SPATIAL) {\n';
+    script += '} else if (prop.propertyValueType === PropertyValueType.ThreeD) {\n';
     script += '  numDims = 3;\n';
     script += '}\n';
 
@@ -171,9 +171,9 @@ export function generateApplyEasyEase(params: {
 
   // Get number of dimensions
   script += 'var numDims = 1;\n';
-  script += 'if (prop.propertyValueType === PropertyValueType.TwoD || prop.propertyValueType === PropertyValueType.TwoD_SPATIAL) {\n';
+  script += 'if (prop.propertyValueType === PropertyValueType.TwoD) {\n';
   script += '  numDims = 2;\n';
-  script += '} else if (prop.propertyValueType === PropertyValueType.ThreeD || prop.propertyValueType === PropertyValueType.ThreeD_SPATIAL) {\n';
+  script += '} else if (prop.propertyValueType === PropertyValueType.ThreeD) {\n';
   script += '  numDims = 3;\n';
   script += '}\n';
 
@@ -235,9 +235,9 @@ export function generateSetTemporalEase(params: {
 
   // Get number of dimensions
   script += 'var numDims = 1;\n';
-  script += 'if (prop.propertyValueType === PropertyValueType.TwoD || prop.propertyValueType === PropertyValueType.TwoD_SPATIAL) {\n';
+  script += 'if (prop.propertyValueType === PropertyValueType.TwoD) {\n';
   script += '  numDims = 2;\n';
-  script += '} else if (prop.propertyValueType === PropertyValueType.ThreeD || prop.propertyValueType === PropertyValueType.ThreeD_SPATIAL) {\n';
+  script += '} else if (prop.propertyValueType === PropertyValueType.ThreeD) {\n';
   script += '  numDims = 3;\n';
   script += '}\n';
 
@@ -284,6 +284,9 @@ export function generateOffsetKeyframes(params: {
   script += generateLayerAccess('comp', params.layerIndex, params.layerName);
   script += generatePropertyAccess('layer', params.property);
 
+  if (typeof params.offset !== 'number' || !isFinite(params.offset)) {
+    throw new Error('offset must be a finite number of seconds');
+  }
   script += 'var offset = ' + params.offset + ';\n';
 
   script += 'if (prop.numKeys === 0) {\n';
@@ -303,25 +306,38 @@ export function generateOffsetKeyframes(params: {
   script += '  });\n';
   script += '}\n';
 
-  // Remove all keyframes
+  // Compute and validate every new time BEFORE touching the property. This
+  // used to remove all keys first and silently drop any that landed before
+  // 0, destroying animation while reporting success.
+  script += 'var earliest = null;\n';
+  script += 'for (var i = 0; i < keyData.length; i++) {\n';
+  script += '  keyData[i].newTime = keyData[i].time + offset;\n';
+  script += '  if (!isFinite(keyData[i].newTime) || (i > 0 && keyData[i].newTime <= keyData[i - 1].newTime)) {\n';
+  script += '    throw new Error("Offset would produce non-finite or overlapping key times. Nothing was changed.");\n';
+  script += '  }\n';
+  script += '  if (earliest === null || keyData[i].newTime < earliest) { earliest = keyData[i].newTime; }\n';
+  script += '}\n';
+  script += 'if (earliest < 0) {\n';
+  script += '  throw new Error("Offset " + offset + " would move a keyframe before time 0 (it would land at " + earliest + "s). Nothing was changed.");\n';
+  script += '}\n';
+
+  // All destination times are valid before rewriting any keys.
   script += 'while (prop.numKeys > 0) {\n';
   script += '  prop.removeKey(1);\n';
   script += '}\n';
 
-  // Re-add keyframes at new times
+  script += 'var keysWritten = 0;\n';
   script += 'for (var i = 0; i < keyData.length; i++) {\n';
-  script += '  var newTime = keyData[i].time + offset;\n';
-  script += '  if (newTime >= 0) {\n';
-  script += '    var keyIndex = prop.addKey(newTime);\n';
-  script += '    prop.setValueAtKey(keyIndex, keyData[i].value);\n';
-  script += '    prop.setInterpolationTypeAtKey(keyIndex, keyData[i].inType, keyData[i].outType);\n';
-  script += '    prop.setTemporalEaseAtKey(keyIndex, keyData[i].inEase, keyData[i].outEase);\n';
-  script += '  }\n';
+  script += '  var keyIndex = prop.addKey(keyData[i].newTime);\n';
+  script += '  prop.setValueAtKey(keyIndex, keyData[i].value);\n';
+  script += '  prop.setInterpolationTypeAtKey(keyIndex, keyData[i].inType, keyData[i].outType);\n';
+  script += '  prop.setTemporalEaseAtKey(keyIndex, keyData[i].inEase, keyData[i].outEase);\n';
+  script += '  keysWritten++;\n';
   script += '}\n';
 
   script += generateResultObject({
     success: 'true',
-    keyframesMoved: 'keyData.length',
+    keyframesMoved: 'keysWritten',
     offset: 'offset'
   });
 
@@ -347,6 +363,12 @@ export function generateScaleKeyframeTiming(params: {
   script += generatePropertyAccess('layer', params.property);
 
   const anchor = params.anchorTime !== undefined ? params.anchorTime : 0;
+  if (typeof params.scale !== 'number' || !isFinite(params.scale) || params.scale <= 0) {
+    throw new Error('scale must be a finite number greater than 0 (2 doubles the timing, 0.5 halves it)');
+  }
+  if (params.anchorTime !== undefined && (typeof params.anchorTime !== 'number' || !isFinite(params.anchorTime))) {
+    throw new Error('anchorTime must be a finite number of seconds');
+  }
   script += 'var scaleFactor = ' + params.scale + ';\n';
   script += 'var anchorTime = ' + anchor + ';\n';
 
@@ -367,25 +389,43 @@ export function generateScaleKeyframeTiming(params: {
   script += '  });\n';
   script += '}\n';
 
-  // Remove all keyframes
+  // Compute and validate every new time BEFORE touching the property. This
+  // used to remove all keys first and re-add only those it could place, so
+  // a missing scale (NaN) or a key pushed before 0 wiped the animation while
+  // reporting success.
+  script += 'for (var i = 0; i < keyData.length; i++) {\n';
+  script += '  var nt = anchorTime + (keyData[i].time - anchorTime) * scaleFactor;\n';
+  script += '  if (!isFinite(nt)) {\n';
+  script += '    throw new Error("Scaling would produce a non-finite key time. Nothing was changed.");\n';
+  script += '  }\n';
+  script += '  if (nt < 0) {\n';
+  script += '    throw new Error("Scaling by " + scaleFactor + " around " + anchorTime + "s would move a keyframe before time 0 (to " + nt + "s). Nothing was changed.");\n';
+  script += '  }\n';
+  // AE supports subframe keys. Only reject times that actually collapse
+  // together through floating-point rounding, not keys in the same frame.
+  script += '  if (i > 0 && nt <= keyData[i - 1].newTime) {\n';
+  script += '    throw new Error("Scaling would produce overlapping key times. Nothing was changed.");\n';
+  script += '  }\n';
+  script += '  keyData[i].newTime = nt;\n';
+  script += '}\n';
+
+  // All destination times are valid before rewriting any keys.
   script += 'while (prop.numKeys > 0) {\n';
   script += '  prop.removeKey(1);\n';
   script += '}\n';
 
-  // Re-add keyframes at scaled times
+  script += 'var keysWritten = 0;\n';
   script += 'for (var i = 0; i < keyData.length; i++) {\n';
-  script += '  var newTime = anchorTime + (keyData[i].time - anchorTime) * scaleFactor;\n';
-  script += '  if (newTime >= 0) {\n';
-  script += '    var keyIndex = prop.addKey(newTime);\n';
-  script += '    prop.setValueAtKey(keyIndex, keyData[i].value);\n';
-  script += '    prop.setInterpolationTypeAtKey(keyIndex, keyData[i].inType, keyData[i].outType);\n';
-  script += '    prop.setTemporalEaseAtKey(keyIndex, keyData[i].inEase, keyData[i].outEase);\n';
-  script += '  }\n';
+  script += '  var keyIndex = prop.addKey(keyData[i].newTime);\n';
+  script += '  prop.setValueAtKey(keyIndex, keyData[i].value);\n';
+  script += '  prop.setInterpolationTypeAtKey(keyIndex, keyData[i].inType, keyData[i].outType);\n';
+  script += '  prop.setTemporalEaseAtKey(keyIndex, keyData[i].inEase, keyData[i].outEase);\n';
+  script += '  keysWritten++;\n';
   script += '}\n';
 
   script += generateResultObject({
     success: 'true',
-    keyframesScaled: 'keyData.length',
+    keyframesScaled: 'keysWritten',
     scale: 'scaleFactor'
   });
 
@@ -465,6 +505,11 @@ export function generateCopyKeyframes(params: {
   targetProperty?: string;
   timeOffset?: number;
 }): string {
+  // Without this, a missing sourceProperty crashes in TypeScript with
+  // "Cannot read properties of undefined (reading 'split')".
+  if (!params.sourceProperty) {
+    throw new Error('copy_keyframes requires sourceProperty');
+  }
   let script = '';
   script += generateProjectCheck();
   script += generateCompAccess(params.compId, params.compName);
@@ -492,14 +537,30 @@ export function generateCopyKeyframes(params: {
   script += '}\n';
 
   // Copy keyframes
+  // Snapshot every source key BEFORE writing any. The loop used to read
+  // sourceProp.numKeys live, so copying onto the same property grew the
+  // bound with every key added - a 2-key copy produced 4,321 keys - and the
+  // added keys also shifted the source indices mid-loop.
+  script += 'var srcCount = sourceProp.numKeys;\n';
+  script += 'var snap = [];\n';
+  script += 'for (var i = 1; i <= srcCount; i++) {\n';
+  script += '  snap.push({\n';
+  script += '    time: sourceProp.keyTime(i),\n';
+  script += '    value: sourceProp.keyValue(i),\n';
+  script += '    inInterp: sourceProp.keyInInterpolationType(i),\n';
+  script += '    outInterp: sourceProp.keyOutInterpolationType(i),\n';
+  script += '    inEase: sourceProp.keyInTemporalEase(i),\n';
+  script += '    outEase: sourceProp.keyOutTemporalEase(i)\n';
+  script += '  });\n';
+  script += '}\n';
   script += 'var keysCopied = 0;\n';
-  script += 'for (var i = 1; i <= sourceProp.numKeys; i++) {\n';
-  script += '  var newTime = sourceProp.keyTime(i) + ' + timeOffset + ';\n';
+  script += 'for (var s = 0; s < snap.length; s++) {\n';
+  script += '  var newTime = snap[s].time + ' + timeOffset + ';\n';
   script += '  if (newTime >= 0) {\n';
   script += '    var keyIndex = targetProp.addKey(newTime);\n';
-  script += '    targetProp.setValueAtKey(keyIndex, sourceProp.keyValue(i));\n';
-  script += '    targetProp.setInterpolationTypeAtKey(keyIndex, sourceProp.keyInInterpolationType(i), sourceProp.keyOutInterpolationType(i));\n';
-  script += '    targetProp.setTemporalEaseAtKey(keyIndex, sourceProp.keyInTemporalEase(i), sourceProp.keyOutTemporalEase(i));\n';
+  script += '    targetProp.setValueAtKey(keyIndex, snap[s].value);\n';
+  script += '    targetProp.setInterpolationTypeAtKey(keyIndex, snap[s].inInterp, snap[s].outInterp);\n';
+  script += '    targetProp.setTemporalEaseAtKey(keyIndex, snap[s].inEase, snap[s].outEase);\n';
   script += '    keysCopied++;\n';
   script += '  }\n';
   script += '}\n';

@@ -282,7 +282,9 @@ export const AE_PROPERTY_PATHS: Record<string, string> = {
   'audioLevels': 'ADBE Audio Group/ADBE Audio Levels',
 
   // Camera
-  'pointOfInterest': 'ADBE Camera Options Group/ADBE Camera Point of Interest',
+  // A camera's Point of Interest is its anchor point - AE only relabels it.
+  // There is no "ADBE Camera Point of Interest" property.
+  'pointOfInterest': 'ADBE Transform Group/ADBE Anchor Point',
   'zoom': 'ADBE Camera Options Group/ADBE Camera Zoom',
   'depthOfField': 'ADBE Camera Options Group/ADBE Camera Depth of Field',
   'focusDistance': 'ADBE Camera Options Group/ADBE Camera Focus Distance',
@@ -293,8 +295,10 @@ export const AE_PROPERTY_PATHS: Record<string, string> = {
   'lightIntensity': 'ADBE Light Options Group/ADBE Light Intensity',
   'lightColor': 'ADBE Light Options Group/ADBE Light Color',
   'coneAngle': 'ADBE Light Options Group/ADBE Light Cone Angle',
-  'coneFeather': 'ADBE Light Options Group/ADBE Light Cone Feather',
-  'castsShadows': 'ADBE Light Options Group/ADBE Light Casts Shadows',
+  // "ADBE Light Cone Feather" (no suffix) is not on current lights.
+  'coneFeather': 'ADBE Light Options Group/ADBE Light Cone Feather 2',
+  // Lights reuse the material match name; "ADBE Light Casts Shadows" doesn't exist.
+  'castsShadows': 'ADBE Light Options Group/ADBE Casts Shadows',
   'shadowDarkness': 'ADBE Light Options Group/ADBE Light Shadow Darkness',
   'shadowDiffusion': 'ADBE Light Options Group/ADBE Light Shadow Diffusion',
 

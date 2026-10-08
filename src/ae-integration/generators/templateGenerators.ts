@@ -403,6 +403,11 @@ export function generateCreateLogoReveal(params: {
   duration?: number;
   backgroundColor?: { r: number; g: number; b: number };
 }): string {
+  // Without this, neither branch below declares logoItem and the script dies
+  // with a bare "ReferenceError: logoItem is undefined".
+  if (params.logoItemId === undefined && !params.logoItemName) {
+    throw new Error('create_logo_reveal animates an existing logo item: pass logoItemId or logoItemName');
+  }
   let script = '';
   script += generateProjectCheck();
   script += generateCompAccess(params.compId, params.compName);
@@ -477,13 +482,113 @@ export function generateCreateLogoReveal(params: {
     script += 'logoLayer.property("Opacity").setValueAtTime(0.2, 100);\n';
     script += 'logoLayer.property("Opacity").setValueAtTime(0.25, 0);\n';
     script += 'logoLayer.property("Opacity").setValueAtTime(0.3, 100);\n';
+  } else if (style === 'particle') {
+    // "particle" used to be accepted with no implementation, so the logo got no
+    // animation. ExtendScript has no particle API, but the bundled particle
+    // effects are ordinary effects: add them by match name and set their
+    // parameters. Two parts:
+    //   1. CC Scatterize on the logo, Scatter animating to 0, so the logo
+    //      assembles out of particles.
+    //   2. A CC Particle Systems II burst on its own solid at the moment the
+    //      logo lands.
+    // Effect parameters are addressed by match name ("CC Scatterize-0001"):
+    // effect property lists are flat and reuse display names.
+    const land = Math.round(duration * 0.5 * 100) / 100;
+
+    script += 'var logoFx = logoLayer.property("ADBE Effect Parade");\n';
+    script += 'if (!logoFx.canAddProperty("CC Scatterize")) {\n';
+    script += '  throw new Error("CC Scatterize is not available in this After Effects install");\n';
+    script += '}\n';
+    // Effects are clipped to the layer's own bounds, so Scatterize on a tight
+    // logo just fills that rectangle with noise. Give it room first:
+    //  - precomps (and solids / vectors) can use Collapse Transformations,
+    //    which renders their effects in this comp's space;
+    //  - raster footage such as a PNG can't collapse, so Grow Bounds enlarges
+    //    the layer's buffer instead. It must sit BEFORE Scatterize in the stack.
+    // canSetCollapseTransformation is the reliable test - layer type isn't.
+    script += 'var logoExpanded = "none";\n';
+    script += 'if (logoLayer.canSetCollapseTransformation) {\n';
+    script += '  logoLayer.collapseTransformation = true;\n';
+    script += '  logoExpanded = "collapseTransformation";\n';
+    script += '} else if (logoFx.canAddProperty("ADBE GROW BOUNDS")) {\n';
+    script += '  var grow = logoFx.addProperty("ADBE GROW BOUNDS");\n';
+    script += '  grow.property("ADBE GROW BOUNDS-0001").setValue(Math.round(Math.max(comp.width, comp.height) / 3));\n';
+    script += '  logoExpanded = "growBounds";\n';
+    script += '}\n';
+    script += 'var scat = logoFx.addProperty("CC Scatterize");\n';
+    script += 'var scatAmount = scat.property("CC Scatterize-0001");\n';
+    script += 'var scatTwist = scat.property("CC Scatterize-0002");\n';
+    // With room to spread, a bigger scatter reads as a particle cloud. Without
+    // it, keep the value modest so the clipped rectangle stays faint.
+    script += 'scatAmount.setValueAtTime(0, logoExpanded === "none" ? 150 : 450);\n';
+    script += 'scatAmount.setValueAtTime(' + land + ', 0);\n';
+    script += 'scatTwist.setValueAtTime(0, 180);\n';
+    script += 'scatTwist.setValueAtTime(' + land + ', 0);\n';
+    // Decelerate into the assembled logo. One-element ease: these are 1D.
+    script += 'var landEase = new KeyframeEase(0, 80);\n';
+    script += 'scatAmount.setTemporalEaseAtKey(2, [landEase], [landEase]);\n';
+    script += 'scatTwist.setTemporalEaseAtKey(2, [landEase], [landEase]);\n';
+    // Fade in across most of the assembly, so the scattered stage stays faint
+    // and the layer's bounding box never reads as a solid rectangle.
+    script += 'logoLayer.property("Opacity").setValueAtTime(0, 0);\n';
+    script += 'logoLayer.property("Opacity").setValueAtTime(' + Math.round(land * 0.85 * 100) / 100 + ', 100);\n';
+
+    script += 'var particleFxOk = true;\n';
+    script += 'var burst = null;\n';
+    script += 'var probeFx = logoFx.canAddProperty("CC Particle Systems II");\n';
+    script += 'if (probeFx) {\n';
+    script += '  burst = comp.layers.addSolid([1, 1, 1], "Logo Particles", comp.width, comp.height, 1);\n';
+    script += '  burst.outPoint = ' + duration + ';\n';
+    script += '  burst.blendingMode = BlendingMode.ADD;\n';
+    script += '  var ps = burst.property("ADBE Effect Parade").addProperty("CC Particle Systems II");\n';
+    script += '  var logoPos = logoLayer.property("ADBE Transform Group").property("ADBE Position").value;\n';
+    script += '  ps.property("CC Particle Systems II-0004").setValue([logoPos[0], logoPos[1]]);\n';
+    // Spawn across the logo's footprint. Radius X/Y are NOT pixels: measured
+    // on a 1920-wide layer, one unit is roughly layer width / 200 (~9.6 px),
+    // so passing the logo's pixel size filled the whole frame.
+    script += '  var pxPerRadiusUnit = burst.width / 200;\n';
+    script += '  ps.property("CC Particle Systems II-0005").setValue(Math.min(1000, (logoLayer.width / 2) / pxPerRadiusUnit * 0.9));\n';
+    script += '  ps.property("CC Particle Systems II-0006").setValue(Math.min(1000, (logoLayer.height / 2) / pxPerRadiusUnit * 0.9));\n';
+    script += '  ps.property("CC Particle Systems II-0002").setValue(1);\n';     // longevity
+    // Velocity scales with the layer's size, so keep it low on a comp-sized solid.
+    script += '  ps.property("CC Particle Systems II-0010").setValue(0.1);\n';   // velocity
+    script += '  ps.property("CC Particle Systems II-0012").setValue(0.05);\n';  // gravity
+    script += '  ps.property("CC Particle Systems II-0013").setValue(10);\n';    // resistance
+    script += '  ps.property("CC Particle Systems II-0019").setValue(0.12);\n';  // birth size
+    script += '  ps.property("CC Particle Systems II-0020").setValue(0);\n';     // death size
+    script += '  ps.property("CC Particle Systems II-0023").setValue(1);\n';     // max opacity
+    // Particle Type popup: 5 = Faded Sphere. The default, 1, draws lines. The
+    // indices include menu separators (3, 8 and 16 render almost nothing), so
+    // this was picked from a rendered contact sheet, not the menu order.
+    script += '  ps.property("CC Particle Systems II-0018").setValue(5);\n';
+    script += '  ps.property("CC Particle Systems II-0025").setValue([1, 1, 1, 1]);\n'; // birth colour
+    script += '  ps.property("CC Particle Systems II-0026").setValue([1, 1, 1, 1]);\n'; // death colour
+    // Birth rate: off, a short burst as the logo lands, off again. HOLD keys
+    // so it switches rather than ramping.
+    script += '  var rate = ps.property("CC Particle Systems II-0001");\n';
+    script += '  rate.setValueAtTime(0, 0);\n';
+    script += '  rate.setValueAtTime(' + land + ', 6);\n';
+    script += '  rate.setValueAtTime(' + Math.round((land + 0.2) * 100) / 100 + ', 0);\n';
+    script += '  for (var rk = 1; rk <= rate.numKeys; rk++) {\n';
+    script += '    rate.setInterpolationTypeAtKey(rk, KeyframeInterpolationType.HOLD, KeyframeInterpolationType.HOLD);\n';
+    script += '  }\n';
+    script += '} else {\n';
+    // The reveal still works without the burst.
+    script += '  particleFxOk = false;\n';
+    script += '}\n';
   }
 
-  script += generateResultObject({
+  const resultProps: Record<string, string> = {
     logoLayerIndex: 'logoLayer.index',
     style: '"' + escapeString(style) + '"',
     duration: String(duration)
-  });
+  };
+  if (style === 'particle') {
+    resultProps.particleLayer = 'burst ? burst.name : null';
+    resultProps.particleBurstAdded = 'particleFxOk';
+    resultProps.logoBoundsExpandedBy = 'logoExpanded';
+  }
+  script += generateResultObject(resultProps);
 
   return wrapInUndoGroup(script, 'Create Logo Reveal');
 }
